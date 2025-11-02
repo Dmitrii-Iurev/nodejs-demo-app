@@ -22,9 +22,13 @@ jobs:
             # Docker login
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-            # Pull, stop, remove and run container
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
+            # Pull latest image (failsafe)
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest || true
+
+            # Stop and remove existing container
             docker stop frontend || true
-            docker rm frontend || true
-            docker run -d --name frontend -p 5000:5000 ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
+            docker rm -f frontend || true
+
+            # Run container with restart policy
+            docker run -d --name frontend --restart unless-stopped -p 5000:5000 ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
 

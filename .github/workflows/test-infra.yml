@@ -19,12 +19,6 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
           aws-session-token:  ${{ secrets.AWS_SESSION_TOKEN }}
 
-      - name: Terraform init & apply
-        run: |
-          cd terraform
-          terraform init
-          terraform apply -auto-approve
-
       - name: SSH to Test Server & Deploy app
         uses: appleboy/ssh-action@v0.1.6
         with:

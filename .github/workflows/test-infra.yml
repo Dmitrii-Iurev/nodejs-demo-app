@@ -19,17 +19,24 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
           aws-session-token:  ${{ secrets.AWS_SESSION_TOKEN }}
 
-      - name: SSH to Test Server & Deploy app
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v0.1.6
         with:
-          host: ${{ steps.terraform.outputs.test_server_public_ip }}
+          host: ${{ secrets.TEST_SERVER_PUBLIC_IP }}
           username: ubuntu
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            docker pull myapp:test
+            echo "Pulling latest test image..."
+            docker pull myapp:test || exit 1
+
+            echo "Restarting application..."
             docker stop myapp || true
             docker rm myapp || true
+
             docker run -d -p 5000:5000 --name myapp myapp:test
+
+            echo " Deployment complete!"
+
 
 
 

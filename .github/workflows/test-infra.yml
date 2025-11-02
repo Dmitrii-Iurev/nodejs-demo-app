@@ -26,16 +26,36 @@ jobs:
           username: ubuntu
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
-            echo "Pulling latest test image..."
-            docker pull myapp:test || exit 1
+            echo "=== Checking Docker installed ==="
+            if ! command -V docker &> /dev/null; then
+              echo "Docker not found. Installing..."
+              curl -fsSL https://get.docker.com | sudo sh
+            fi
 
-            echo "Restarting application..."
-            docker stop myapp || true
-            docker rm myapp || true
+            echo "=== Pulling latest test image ==="
+            sudo docker pull myapp:test || exit 1
 
-            docker run -d -p 5000:5000 --name myapp myapp:test
+            echo "=== Stopping old container (if exists) ==="
+            sudo docker stop myapp || true
+            sudo docker rm myapp || true
 
-            echo " Deployment complete!"
+            echo "=== Starting new container ==="
+            sudo docker run -d -p 5000:5000 --name myapp myapp:test
+
+            echo "=== Waiting for app ==="
+            sleep 3
+
+            echo "=== Checking if container is running ==="
+            if sudo docker ps --filter "name=myapp" --format '{{.Names}}' | grep -q "myapp"; then
+              echo "✅ Deployment successful!"
+              sudo docker ps
+            else
+              echo "❌ Deployment failed: container not running"
+              sudo docker logs myapp
+              exit 1
+            fi
+
+            echo "✅ Done!"
 
 
 

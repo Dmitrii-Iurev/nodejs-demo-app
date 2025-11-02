@@ -24,23 +24,27 @@ jobs:
           echo "Current directory: $(pwd)"
           ls -l $GITHUB_WORKSPACE/user-data.sh
 
-      - name: Find latest Ubuntu 24.04 LTS AMI
+      - name: Find latest Ubuntu 22.04 LTS AMI
         id: ami_lookup
         run: |
           AMI_ID=$(aws ec2 describe-images \
             --owners 099720109477 \
-            --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-jammy-24.04-amd64-*" "Name=state,Values=available" \
+            --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*" "Name=state,Values=available" \
             --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" \
             --output text)
 
           if [ -z "$AMI_ID" ] || [ "$AMI_ID" = "None" ]; then
-            echo "ERROR: No Ubuntu 24.04 LTS AMI found in this region!"
+            echo "ERROR: No Ubuntu 22.04 LTS AMI found in this region!"
+            aws ec2 describe-images \
+              --owners 099720109477 \
+              --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*" \
+              --query "Images[].{Name:Name,Id:ImageId}" \
+              --output table
             exit 1
           fi
 
-          echo "Latest Ubuntu 24.04 LTS AMI: $AMI_ID"
+          echo "Latest Ubuntu 22.04 LTS AMI: $AMI_ID"
           echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
-          echo "::set-output name=ami::$AMI_ID"
 
       - name: Terminate old Test EC2 servers
         run: |
@@ -52,7 +56,6 @@ jobs:
           if [ ! -z "$INSTANCE_IDS" ]; then
             echo "Terminating old instances: $INSTANCE_IDS"
             aws ec2 terminate-instances --instance-ids $INSTANCE_IDS
-
             echo "Waiting for instances to terminate..."
             aws ec2 wait instance-terminated --instance-ids $INSTANCE_IDS
           fi
@@ -85,6 +88,7 @@ jobs:
 
           echo "Test EC2 Public IP: $PUBLIC_IP"
           echo "SSH_TEST_HOST=$PUBLIC_IP" >> $GITHUB_ENV
+
 
 
 

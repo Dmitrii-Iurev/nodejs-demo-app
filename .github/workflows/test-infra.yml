@@ -1,0 +1,51 @@
+name: Setup Test Infrastructure
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION }}
+
+      - name: Terminate old Test EC2 servers
+        run: |
+          INSTANCE_IDS=$(aws ec2 describe-instances \
+            --filters "Name=tag:Environment,Values=Test" \
+            --query "Reservations[].Instances[].InstanceId" \
+            --output text)
+
+          if [ ! -z "$INSTANCE_IDS" ]; then
+            echo "Terminating old instances: $INSTANCE_IDS"
+            aws ec2 terminate-instances --instance-ids $INSTANCE_IDS
+          fi
+
+      - name: Create new EC2 Test Server
+        run: |
+          EC2_ID=$(aws ec2 run-instances \
+            --image-id ami-0c9c942bd7bf113a2 \ # Ubuntu 24.04 LTS
+            --instance-type t3.micro \
+            --key-name test-ssh-key \
+            --security-group-ids sg-000000000 \
+            --tag-specifications 'ResourceType=instance,Tags=[{Key=Environment,Value=Test}]' \
+            --user-data file://user-data.sh \
+            --query "Instances[0].InstanceId" \
+            --output text)
+
+          echo "Created Test EC2: $EC2_ID"
+
+          PUBLIC_IP=$(aws ec2 describe-instances \
+            --instance-ids $EC2_ID \
+            --query "Reservations[].Instances[].PublicIpAddress" \
+            --output text)
+
+          echo "Test EC2 Public IP: $PUBLIC_IP"
+
+          echo "SSH_TEST_HOST=$PUBLIC_IP" >> $GITHUB_ENV

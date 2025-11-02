@@ -1,0 +1,29 @@
+name: Production Deployment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-prod:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: SSH deploy to production server
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ubuntu
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          port: 22
+          script: |
+            # Docker login
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+            # Pull, stop, remove and run container on port 80
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/nodejs-demo-app:latest
+            docker stop nodejs-demo-app || true
+            docker rm -f nodejs-demo-app || true
+            docker run -d --name nodejs-demo-app --restart unless-stopped -p 80:5000 ${{ secrets.DOCKERHUB_USERNAME }}/nodejs-demo-app:latest

@@ -19,7 +19,11 @@ jobs:
           key: ${{ secrets.TEST_SERVER_SSH_KEY }}
           port: 22
           script: |
-            docker pull dmitrii0511iurev/frontend:latest
+            # Docker login
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+
+            # Pull, stop, remove and run container
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
             docker stop frontend || true
             docker rm frontend || true
-            docker run -d --name frontend -p 5000:5000 dmitrii0511iurev/frontend:latest
+            docker run -d --name frontend -p 5000:5000 ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest

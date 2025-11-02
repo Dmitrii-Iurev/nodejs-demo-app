@@ -1,0 +1,25 @@
+name: Test Deployment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: SSH deploy to test server
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.TEST_SERVER_HOST }}
+          username: ubuntu
+          key: ${{ secrets.TEST_SERVER_SSH_KEY }}
+          port: 22
+          script: |
+            docker pull dmitrii0511iurev/frontend:latest
+            docker stop frontend || true
+            docker rm frontend || true
+            docker run -d --name frontend -p 5000:5000 dmitrii0511iurev/frontend:latest

@@ -1,24 +1,41 @@
-name: Test Deployment
+name: Build & Deploy Test App
 
 on:
   workflow_dispatch:
 
 jobs:
-  deploy-test:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout repository
       - name: Checkout repo
         uses: actions/checkout@v3
 
+      # 2️⃣ Set up AWS credentials (optioneel, voor SSH)
       - name: Setup AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-          aws-session-token:  ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
 
+      # 3️⃣ Log in to Docker Hub
+      - name: Docker login
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 4️⃣ Build Docker image
+      - name: Build Docker image
+        run: |
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/myapp:test"
+          docker build -t $IMAGE .
+          docker push $IMAGE
+
+      # 5️⃣ Deploy via SSH to Test Server
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v0.1.6
         with:
@@ -34,34 +51,17 @@ jobs:
               curl -fsSL https://get.docker.com | sudo sh
             fi
 
-            echo "=== Login Docker Hub ==="
-            echo "${{ secrets.DOCKERHUB_TOKEN }}" | sudo docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
-
             echo "=== Pull image ==="
-            sudo docker pull "$IMAGE" || exit 1
+            sudo docker pull $IMAGE || exit 1
 
-            echo "=== Stopping old container (if exists) ==="
+            echo "=== Stop old container ==="
             sudo docker stop myapp || true
             sudo docker rm myapp || true
 
-            echo "=== Starting new container ==="
-            sudo docker run -d -p 5000:5000 --name myapp "$IMAGE"
+            echo "=== Start new container ==="
+            sudo docker run -d -p 5000:5000 --name myapp $IMAGE
 
-            echo "=== Waiting for app ==="
-            sleep 3
-
-            echo "=== Checking if container is running ==="
-            if sudo docker ps --filter "name=myapp" --format '{{.Names}}' | grep -q "myapp"; then
-              echo "✅ Deployment successful!"
-              sudo docker ps
-            else
-              echo "❌ Deployment failed: container not running"
-              sudo docker logs myapp
-              exit 1
-            fi
-
-            echo "✅ Done!"
-
+            echo "✅ Deployment complete!"
 
 
 

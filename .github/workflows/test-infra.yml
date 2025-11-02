@@ -1,93 +1,41 @@
-name: Setup Test Infrastructure
+name: Test Deployment
 
 on:
   workflow_dispatch:
 
 jobs:
-  setup-test:
+  deploy-test:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Configure AWS credentials
+      - name: Setup AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ secrets.AWS_REGION }}
-          aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Check user-data.sh exists
+      - name: Terraform init & apply
         run: |
-          echo "Current directory: $(pwd)"
-          ls -l $GITHUB_WORKSPACE/user-data.sh
+          cd terraform
+          terraform init
+          terraform apply -auto-approve
 
-      - name: Find latest Ubuntu 22.04 LTS AMI
-        id: ami_lookup
-        run: |
-          AMI_ID=$(aws ec2 describe-images \
-            --owners 099720109477 \
-            --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*" "Name=state,Values=available" \
-            --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" \
-            --output text)
+      - name: SSH to Test Server & Deploy app
+        uses: appleboy/ssh-action@v0.1.6
+        with:
+          host: ${{ steps.terraform.outputs.test_server_public_ip }}
+          username: ubuntu
+          key: ${{ secrets.AWS_SSH_KEY }}
+          script: |
+            docker pull myapp:test
+            docker stop myapp || true
+            docker rm myapp || true
+            docker run -d -p 5000:5000 --name myapp myapp:test
 
-          if [ -z "$AMI_ID" ] || [ "$AMI_ID" = "None" ]; then
-            echo "ERROR: No Ubuntu 22.04 LTS AMI found in this region!"
-            aws ec2 describe-images \
-              --owners 099720109477 \
-              --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*" \
-              --query "Images[].{Name:Name,Id:ImageId}" \
-              --output table
-            exit 1
-          fi
-
-          echo "Latest Ubuntu 22.04 LTS AMI: $AMI_ID"
-          echo "AMI_ID=$AMI_ID" >> $GITHUB_ENV
-
-      - name: Terminate old Test EC2 servers
-        run: |
-          INSTANCE_IDS=$(aws ec2 describe-instances \
-            --filters "Name=tag:Environment,Values=Test" \
-            --query "Reservations[].Instances[].InstanceId" \
-            --output text)
-
-          if [ ! -z "$INSTANCE_IDS" ]; then
-            echo "Terminating old instances: $INSTANCE_IDS"
-            aws ec2 terminate-instances --instance-ids $INSTANCE_IDS
-            echo "Waiting for instances to terminate..."
-            aws ec2 wait instance-terminated --instance-ids $INSTANCE_IDS
-          fi
-
-      - name: Create new EC2 Test Server
-        run: |
-          echo "Starting new Test EC2 instance..."
-
-          EC2_ID=$(aws ec2 run-instances \
-            --image-id ${{ env.AMI_ID }} \
-            --instance-type t3.micro \
-            --key-name test-ssh-key \
-            --security-group-ids sg-000000000 \
-            --tag-specifications 'ResourceType=instance,Tags=[{Key=Environment,Value=Test}]' \
-            --user-data file://$GITHUB_WORKSPACE/user-data.sh \
-            --query "Instances[0].InstanceId" \
-            --output text)
-
-          echo "Created Test EC2: $EC2_ID"
-
-          echo "Waiting for instance to have a public IP..."
-          PUBLIC_IP=""
-          while [ -z "$PUBLIC_IP" ]; do
-            sleep 5
-            PUBLIC_IP=$(aws ec2 describe-instances \
-              --instance-ids $EC2_ID \
-              --query "Reservations[0].Instances[0].PublicIpAddress" \
-              --output text)
-          done
-
-          echo "Test EC2 Public IP: $PUBLIC_IP"
-          echo "SSH_TEST_HOST=$PUBLIC_IP" >> $GITHUB_ENV
 
 
 

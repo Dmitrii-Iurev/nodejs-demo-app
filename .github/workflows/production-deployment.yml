@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy-prod:
+  deploy-production:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v5
 
       - name: SSH deploy to production server
@@ -22,8 +22,13 @@ jobs:
             # Docker login
             echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
 
-            # Pull, stop, remove and run container on port 80
+            # Pull latest image
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/nodejs-demo-app:latest
+
+            # Stop and remove old container if exists
             docker stop nodejs-demo-app || true
             docker rm -f nodejs-demo-app || true
+
+            # Run container on port 80
             docker run -d --name nodejs-demo-app --restart unless-stopped -p 80:5000 ${{ secrets.DOCKERHUB_USERNAME }}/nodejs-demo-app:latest
+

@@ -16,6 +16,11 @@ jobs:
           aws-region:            ${{ secrets.AWS_REGION }}
           aws-session-token:     ${{ secrets.AWS_SESSION_TOKEN }}
 
+      - name: Check user-data.sh exists
+        run: |
+          echo "Current directory: $(pwd)"
+          ls -l $GITHUB_WORKSPACE/user-data.sh
+
       - name: Terminate old Test EC2 servers
         run: |
           INSTANCE_IDS=$(aws ec2 describe-instances \
@@ -30,14 +35,15 @@ jobs:
 
       - name: Create new EC2 Test Server
         run: |
-          # Ubuntu 24.04 LTS AMI
+          echo "Starting new Test EC2 instance..."
+
           EC2_ID=$(aws ec2 run-instances \
             --image-id ami-0c9c942bd7bf113a2 \
             --instance-type t3.micro \
             --key-name test-ssh-key \
             --security-group-ids sg-000000000 \
             --tag-specifications 'ResourceType=instance,Tags=[{Key=Environment,Value=Test}]' \
-            --user-data file://user-data.sh \
+            --user-data file://$GITHUB_WORKSPACE/user-data.sh \
             --query "Instances[0].InstanceId" \
             --output text)
 
@@ -56,5 +62,6 @@ jobs:
 
           echo "Test EC2 Public IP: $PUBLIC_IP"
 
-          # Sla public IP op als GitHub Actions environment variable
+          # Zet de public IP als GitHub Actions environment variabele
           echo "SSH_TEST_HOST=$PUBLIC_IP" >> $GITHUB_ENV
+

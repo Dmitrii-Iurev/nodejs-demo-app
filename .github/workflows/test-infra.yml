@@ -30,8 +30,9 @@ jobs:
 
       - name: Create new EC2 Test Server
         run: |
+          # Ubuntu 24.04 LTS AMI
           EC2_ID=$(aws ec2 run-instances \
-            --image-id ami-0c9c942bd7bf113a2 \ # Ubuntu 24.04 LTS
+            --image-id ami-0c9c942bd7bf113a2 \
             --instance-type t3.micro \
             --key-name test-ssh-key \
             --security-group-ids sg-000000000 \
@@ -42,11 +43,18 @@ jobs:
 
           echo "Created Test EC2: $EC2_ID"
 
-          PUBLIC_IP=$(aws ec2 describe-instances \
-            --instance-ids $EC2_ID \
-            --query "Reservations[].Instances[].PublicIpAddress" \
-            --output text)
+          # Wacht tot de instance een public IP heeft
+          echo "Waiting for instance to have a public IP..."
+          PUBLIC_IP=""
+          while [ -z "$PUBLIC_IP" ]; do
+            sleep 5
+            PUBLIC_IP=$(aws ec2 describe-instances \
+              --instance-ids $EC2_ID \
+              --query "Reservations[0].Instances[0].PublicIpAddress" \
+              --output text)
+          done
 
           echo "Test EC2 Public IP: $PUBLIC_IP"
 
+          # Sla public IP op als GitHub Actions environment variable
           echo "SSH_TEST_HOST=$PUBLIC_IP" >> $GITHUB_ENV

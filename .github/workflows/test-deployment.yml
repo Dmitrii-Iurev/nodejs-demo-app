@@ -27,3 +27,4 @@ jobs:
             docker stop frontend || true
             docker rm frontend || true
             docker run -d --name frontend -p 5000:5000 ${{ secrets.DOCKERHUB_USERNAME }}/frontend:latest
+
